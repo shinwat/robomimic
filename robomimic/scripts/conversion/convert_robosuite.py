@@ -55,7 +55,7 @@ if __name__ == "__main__":
     total_samples = 0
     for ep in f["data"]:
         # ensure model-xml is in per-episode metadata
-        assert "model_file" in f["data/{}".format(ep)].attrs
+        # assert "model_file" in f["data/{}".format(ep)].attrs
 
         # add "num_samples" into per-episode metadata
         if "num_samples" in f["data/{}".format(ep)].attrs:

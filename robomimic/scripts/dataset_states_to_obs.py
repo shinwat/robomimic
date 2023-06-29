@@ -60,12 +60,20 @@ import robomimic.utils.file_utils as FileUtils
 import robomimic.utils.env_utils as EnvUtils
 from robomimic.envs.env_base import EnvBase
 
+def get_observations_from_states(state):
+    ret = {}
+    ret["tool_pos"] = np.array(state[:3]) # 3
+    ret["tool_orn"] = np.array(state[3:7]) # 4
+    ret["obj_pos"] = np.array(state[7:10]) # 3
+    ret["obj_orn"] = np.array(state[10:]) # 4
+    return ret
 
 def extract_trajectory(
-    env, 
+    # env, 
     initial_state, 
     states, 
     actions,
+    goal,
     done_mode,
     camera_names=None, 
     camera_height=84, 
@@ -84,23 +92,15 @@ def extract_trajectory(
             success state. If 1, done is 1 at the end of each trajectory. 
             If 2, do both.
     """
-    assert isinstance(env, EnvBase)
+    # assert isinstance(env, EnvBase)
     assert states.shape[0] == actions.shape[0]
 
     # load the initial state
-    env.reset()
-    obs = env.reset_to(initial_state)
+    obs = get_observations_from_states(list(initial_state.values())[0])
+
 
     # maybe add in intrinsics and extrinsics for all cameras
     camera_info = None
-    is_robosuite_env = EnvUtils.is_robosuite_env(env=env)
-    if is_robosuite_env:
-        camera_info = get_camera_info(
-            env=env,
-            camera_names=camera_names, 
-            camera_height=camera_height, 
-            camera_width=camera_width,
-        )
 
     traj = dict(
         obs=[], 
@@ -109,6 +109,7 @@ def extract_trajectory(
         dones=[], 
         actions=np.array(actions), 
         states=np.array(states), 
+        goal=np.array(goal),
         initial_state_dict=initial_state,
     )
     traj_len = states.shape[0]
@@ -118,15 +119,18 @@ def extract_trajectory(
         # get next observation
         if t == traj_len:
             # play final action to get next observation for last timestep
-            next_obs, _, _, _ = env.step(actions[t - 1])
+            # next_obs, _, _, _ = env.step(actions[t - 1])
+            next_obs = get_observations_from_states(states[t-1])#KLUDGE
+
         else:
             # reset to simulator state to get observation
-            next_obs = env.reset_to({"states" : states[t]})
+            # next_obs = env.reset_to({"states" : states[t]})
+            next_obs = get_observations_from_states(states[t])
 
         # infer reward signal
         # note: our tasks use reward r(s'), reward AFTER transition, so this is
         #       the reward for the current timestep
-        r = env.get_reward()
+        r = 0#env.get_reward()
 
         # infer done signal
         done = False
@@ -135,7 +139,7 @@ def extract_trajectory(
             done = done or (t == traj_len)
         if (done_mode == 0) or (done_mode == 2):
             # done = 1 when s' is task success state
-            done = done or env.is_success()["task"]
+            done = done #or env.is_success()["task"]
         done = int(done)
 
         # collect transition
@@ -221,12 +225,12 @@ def dataset_states_to_obs(args):
         use_depth_obs=args.depth,
     )
 
-    print("==== Using environment with the following metadata ====")
-    print(json.dumps(env.serialize(), indent=4))
-    print("")
+    # print("==== Using environment with the following metadata ====")
+    # print(json.dumps(env.serialize(), indent=4))
+    # print("")
 
     # some operations for playback are robosuite-specific, so determine if this environment is a robosuite env
-    is_robosuite_env = EnvUtils.is_robosuite_env(env_meta)
+    is_robosuite_env = False #EnvUtils.is_robosuite_env(env_meta)
 
     # list of all demonstration episodes (sorted in increasing number order)
     f = h5py.File(args.dataset, "r")
@@ -257,11 +261,13 @@ def dataset_states_to_obs(args):
 
         # extract obs, rewards, dones
         actions = f["data/{}/actions".format(ep)][()]
+        goal = f["data/{}/goal".format(ep)][()]
         traj, camera_info = extract_trajectory(
-            env=env, 
+            # env=env, 
             initial_state=initial_state, 
             states=states, 
             actions=actions,
+            goal=goal,
             done_mode=args.done_mode,
             camera_names=args.camera_names, 
             camera_height=args.camera_height, 
@@ -283,6 +289,7 @@ def dataset_states_to_obs(args):
         ep_data_grp.create_dataset("states", data=np.array(traj["states"]))
         ep_data_grp.create_dataset("rewards", data=np.array(traj["rewards"]))
         ep_data_grp.create_dataset("dones", data=np.array(traj["dones"]))
+        ep_data_grp.create_dataset("goal", data=np.array(traj["goal"]))
         for k in traj["obs"]:
             if args.compress:
                 ep_data_grp.create_dataset("obs/{}".format(k), data=np.array(traj["obs"][k]), compression="gzip")
