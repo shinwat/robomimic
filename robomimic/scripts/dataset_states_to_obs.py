@@ -121,17 +121,13 @@ def extract_trajectory(
             # play final action to get next observation for last timestep
             # next_obs, _, _, _ = env.step(actions[t - 1])
             next_obs = get_observations_from_states(states[t-1])#KLUDGE
+            r = 1 # reward is hindsight binary task completion, e.g. end of trajectory
 
         else:
             # reset to simulator state to get observation
             # next_obs = env.reset_to({"states" : states[t]})
             next_obs = get_observations_from_states(states[t])
-
-        # infer reward signal
-        # note: our tasks use reward r(s'), reward AFTER transition, so this is
-        #       the reward for the current timestep
-        r = 0#env.get_reward()
-
+            r = 0
         # infer done signal
         done = False
         if (done_mode == 1) or (done_mode == 2):
