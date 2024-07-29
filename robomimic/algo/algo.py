@@ -524,3 +524,18 @@ class RolloutPolicy(object):
             goal = self._prepare_observation(goal)
         ac = self.policy.get_action(obs_dict=ob, goal_dict=goal)
         return TensorUtils.to_numpy(ac[0])
+
+    def get_value(self, ob, goal=None):
+        """
+        Produce state value from raw observation dict (and maybe goal dict) from environment.
+
+        Args:
+            ob (dict): single observation dictionary from environment (no batch dimension, 
+                and np.array values for each key)
+            goal (dict): goal observation
+        """
+        ob = self._prepare_observation(ob)
+        if goal is not None:
+            goal = self._prepare_observation(goal)
+        sv = self.policy.get_state_value(obs_dict=ob, goal_dict=goal)
+        return TensorUtils.to_numpy(sv[0])
